@@ -1,5 +1,7 @@
 # SplitSum - Contracts
 
+[![CI](https://github.com/encode-club-solidity-bootcamp-team-11/SplitSum-Contracts/actions/workflows/build.yml/badge.svg)](https://github.com/encode-club-solidity-bootcamp-team-11/SplitSum-Contracts/actions/workflows/build.yml)
+
 Split expenses with friends when you go hangouts or your holiday trips.
 
 <div align="center">
