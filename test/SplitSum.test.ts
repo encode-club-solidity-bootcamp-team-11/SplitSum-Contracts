@@ -1,7 +1,6 @@
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { expect } from "chai";
 import { ethers } from "hardhat";
-
 import { SplitSum } from "../typechain-types";
 
 describe("SplitSum", () => {
@@ -17,11 +16,18 @@ describe("SplitSum", () => {
     await contract.deployed();
   });
 
+  describe("Deployment", async () => {
+    it("sets the contract's owner", async () => {
+      expect(await contract.owner()).to.eq(deployer.address);
+    });
+  });
+
   describe("Users", async () => {
     it("updates user profile", async () => {
-      await contract.updateUserProfile("John Doe", "john@example.com");
+      const account = accounts[0];
+      await contract.connect(account).updateUserProfile("John Doe", "john@example.com");
 
-      const userProfile = await contract.getUserProfile();
+      const userProfile = await contract.connect(account).getUserProfile();
       expect(userProfile.name).to.eq("John Doe");
       expect(userProfile.email).to.eq("john@example.com");
     });
@@ -32,6 +38,34 @@ describe("SplitSum", () => {
       await expect(contract.connect(account).updateUserProfile("John Doe", "john@example.com"))
         .to.emit(contract, "UserProfileUpdated")
         .withArgs(account.address, "John Doe", "john@example.com");
+    });
+  });
+
+  describe("Groups", async () => {
+    it("creates a new group", async () => {
+      const account = accounts[0];
+
+      const txn = await contract.connect(account).createGroup("Friend Hangouts", "group description");
+      const txnReceipt = await txn.wait();
+
+      const groupId = txnReceipt.events![0].args!.groupId;
+      const group = await contract.getGroup(groupId);
+      expect(group.groupId).to.eq(groupId);
+      expect(group.ownerAddress).to.eq(account.address);
+      expect(group.name).to.eq("Friend Hangouts");
+      expect(group.description).to.eq("group description");
+    });
+
+    it("list all groups that the user belongs to", async () => {
+      const account = accounts[0];
+      const otherAccount = accounts[1];
+
+      await contract.connect(account).createGroup("My group", "group description");
+      await contract.connect(otherAccount).createGroup("Other group", "group description");
+
+      const groups = await contract.connect(account).listMembershipGroups();
+      expect(groups.length).to.eq(1);
+      expect(groups[0].name).to.eq("My group");
     });
   });
 });
