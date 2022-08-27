@@ -28,6 +28,7 @@ describe("SplitSum", () => {
       await contract.connect(account).updateUserProfile("John Doe", "john@example.com");
 
       const userProfile = await contract.connect(account).getUserProfile();
+      expect(userProfile.ownerAddress).to.eq(account.address);
       expect(userProfile.name).to.eq("John Doe");
       expect(userProfile.email).to.eq("john@example.com");
     });
@@ -45,10 +46,8 @@ describe("SplitSum", () => {
     it("creates a new group", async () => {
       const account = accounts[0];
 
-      const txn = await contract.connect(account).createGroup("Friend Hangouts", "group description");
-      const txnReceipt = await txn.wait();
+      const groupId = await createGroup(account, "Friend Hangouts", "group description");
 
-      const groupId = txnReceipt.events![0].args!.groupId;
       const group = await contract.getGroup(groupId);
       expect(group.groupId).to.eq(groupId);
       expect(group.ownerAddress).to.eq(account.address);
@@ -56,16 +55,56 @@ describe("SplitSum", () => {
       expect(group.description).to.eq("group description");
     });
 
+    it("does not allow to create a duplicate group", async () => {
+      const account = accounts[0];
+      await createGroup(account, "existing group name", "group description");
+
+      await expect(
+        contract.connect(account).createGroup("existing group name", "group description", [])
+      ).to.revertedWith("group already exists");
+    });
+
+    it("creates a new group with members", async () => {
+      const account = accounts[0];
+      const membersAddresses = [accounts[1].address, accounts[2].address];
+      const groupId = await createGroup(account, "Friend Hangouts", "group description", membersAddresses);
+
+      const memberships = await contract.listGroupMemberships(groupId);
+
+      expect(memberships.length).to.eq(3);
+      expect(memberships.map((a) => a.memberAddress)).to.have.members([
+        account.address,
+        membersAddresses[0],
+        membersAddresses[1],
+      ]);
+      expect(memberships.map((a) => Number(a.balance))).to.have.members([0, 0, 0]);
+    });
+
     it("list all groups that the user belongs to", async () => {
       const account = accounts[0];
-      const otherAccount = accounts[1];
-
-      await contract.connect(account).createGroup("My group", "group description");
-      await contract.connect(otherAccount).createGroup("Other group", "group description");
+      const theSameGroupAccount = accounts[1];
+      const otherAccount = accounts[2];
+      await createGroup(account, "My group", "group description");
+      await createGroup(theSameGroupAccount, "My membership group", "group description", [account.address]);
+      await createGroup(otherAccount, "Other group", "group description");
 
       const groups = await contract.connect(account).listMembershipGroups();
-      expect(groups.length).to.eq(1);
+
+      expect(groups.length).to.eq(2);
       expect(groups[0].name).to.eq("My group");
+      expect(groups[1].name).to.eq("My membership group");
     });
   });
+
+  async function createGroup(
+    owner: SignerWithAddress,
+    name: string,
+    description: string,
+    membersAddresses: string[] = []
+  ): Promise<string> {
+    const txn = await contract.connect(owner).createGroup(name, description, membersAddresses);
+    const txnReceipt = await txn.wait();
+    const groupId = txnReceipt.events![0].args!.groupId;
+    return groupId;
+  }
 });

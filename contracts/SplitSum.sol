@@ -6,6 +6,7 @@ contract SplitSum {
     event GroupCreated(bytes32 indexed groupId, address indexed ownerAddress, string name, string description);
 
     struct UserProfile {
+        address ownerAddress;
         string name;
         string email;
     }
@@ -15,10 +16,10 @@ contract SplitSum {
         address ownerAddress;
         string name;
         string description;
-        mapping(address => Membership[]) memberships;
     }
 
     struct Membership {
+        address memberAddress;
         string name;
         int256 balance;
     }
@@ -30,6 +31,7 @@ contract SplitSum {
     mapping(bytes32 => Group) private _groups;
     mapping(address => Group[]) private _ownedGroups;
     mapping(address => Group[]) private _membershipGroups;
+    mapping(bytes32 => Membership[]) private _groupMemberships;
 
     constructor() {
         _owner = msg.sender;
@@ -40,7 +42,7 @@ contract SplitSum {
     }
 
     function updateUserProfile(string calldata name, string calldata email) external {
-        _userProfiles[msg.sender] = UserProfile({name: name, email: email});
+        _userProfiles[msg.sender] = UserProfile({ownerAddress: msg.sender, name: name, email: email});
 
         emit UserProfileUpdated(msg.sender, name, email);
     }
@@ -49,13 +51,21 @@ contract SplitSum {
         return _userProfiles[msg.sender];
     }
 
-    function createGroup(string calldata name, string calldata description) external {
+    function createGroup(
+        string calldata name,
+        string calldata description,
+        address[] calldata memberAddresses
+    ) external {
         bytes32 groupId = keccak256(abi.encodePacked(msg.sender, address(this), name));
-        require(bytes(_groups[groupId].name).length == 0, "group already exists");
+        require(_groups[groupId].groupId == 0, "group already exists");
 
         _groups[groupId] = Group({groupId: groupId, ownerAddress: msg.sender, name: name, description: description});
         _ownedGroups[msg.sender].push(_groups[groupId]);
-        _membershipGroups[msg.sender].push(_groups[groupId]);
+
+        addGroupMembership(groupId, msg.sender);
+        for (uint256 i = 0; i < memberAddresses.length; i++) {
+            addGroupMembership(groupId, memberAddresses[i]);
+        }
 
         emit GroupCreated(groupId, msg.sender, name, description);
     }
@@ -66,5 +76,14 @@ contract SplitSum {
 
     function listMembershipGroups() external view returns (Group[] memory) {
         return _membershipGroups[msg.sender];
+    }
+
+    function listGroupMemberships(bytes32 groupId) external view returns (Membership[] memory) {
+        return _groupMemberships[groupId];
+    }
+
+    function addGroupMembership(bytes32 groupId, address memberAddress) internal {
+        _membershipGroups[memberAddress].push(_groups[groupId]);
+        _groupMemberships[groupId].push(Membership({memberAddress: memberAddress, name: "", balance: 0}));
     }
 }
