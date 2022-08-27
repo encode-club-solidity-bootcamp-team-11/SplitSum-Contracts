@@ -47,6 +47,10 @@ contract SplitSum {
         return _owner;
     }
 
+    /********************************************************************
+     *   Users                                                          *
+     ********************************************************************/
+
     function updateUserProfile(string calldata name, string calldata email) external {
         _userProfiles[msg.sender] = User({userAddress: msg.sender, name: name, email: email});
 
@@ -70,6 +74,10 @@ contract SplitSum {
     function listContacts() external view returns (User[] memory) {
         return _userContacts[msg.sender];
     }
+
+    /********************************************************************
+     *   Groups                                                         *
+     ********************************************************************/
 
     function createGroup(
         string calldata name,
