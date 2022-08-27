@@ -94,6 +94,26 @@ describe("SplitSum", () => {
       expect(groups[0].name).to.eq("My group");
       expect(groups[1].name).to.eq("My membership group");
     });
+
+    it("add a new member into a group", async () => {
+      const groupOwnerAccount = accounts[0];
+      const membershipAccount = accounts[1];
+      const otherAccount = accounts[2];
+      const groupId = await createGroup(groupOwnerAccount, "My group", "group description");
+
+      await expect(
+        contract.connect(otherAccount).addGroupMembership(groupId, membershipAccount.address)
+      ).to.revertedWith("Not a group owner");
+
+      await contract.connect(groupOwnerAccount).addGroupMembership(groupId, membershipAccount.address);
+      const memberships = await contract.listGroupMemberships(groupId);
+
+      expect(memberships.length).to.eq(2);
+      expect(memberships.map((a) => a.memberAddress)).to.have.members([
+        groupOwnerAccount.address,
+        membershipAccount.address,
+      ]);
+    });
   });
 
   async function createGroup(

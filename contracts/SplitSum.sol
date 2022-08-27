@@ -62,9 +62,9 @@ contract SplitSum {
         _groups[groupId] = Group({groupId: groupId, ownerAddress: msg.sender, name: name, description: description});
         _ownedGroups[msg.sender].push(_groups[groupId]);
 
-        addGroupMembership(groupId, msg.sender);
+        _addGroupMembership(groupId, msg.sender);
         for (uint256 i = 0; i < memberAddresses.length; i++) {
-            addGroupMembership(groupId, memberAddresses[i]);
+            _addGroupMembership(groupId, memberAddresses[i]);
         }
 
         emit GroupCreated(groupId, msg.sender, name, description);
@@ -82,7 +82,13 @@ contract SplitSum {
         return _groupMemberships[groupId];
     }
 
-    function addGroupMembership(bytes32 groupId, address memberAddress) internal {
+    function addGroupMembership(bytes32 groupId, address memberAddress) external {
+        require(_groups[groupId].ownerAddress == msg.sender, "Not a group owner");
+
+        _addGroupMembership(groupId, memberAddress);
+    }
+
+    function _addGroupMembership(bytes32 groupId, address memberAddress) internal {
         _membershipGroups[memberAddress].push(_groups[groupId]);
         _groupMemberships[groupId].push(Membership({memberAddress: memberAddress, name: "", balance: 0}));
     }
