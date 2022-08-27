@@ -28,7 +28,7 @@ describe("SplitSum", () => {
       await contract.connect(account).updateUserProfile("John Doe", "john@example.com");
 
       const userProfile = await contract.connect(account).getUserProfile();
-      expect(userProfile.ownerAddress).to.eq(account.address);
+      expect(userProfile.userAddress).to.eq(account.address);
       expect(userProfile.name).to.eq("John Doe");
       expect(userProfile.email).to.eq("john@example.com");
     });
@@ -39,6 +39,18 @@ describe("SplitSum", () => {
       await expect(contract.connect(account).updateUserProfile("John Doe", "john@example.com"))
         .to.emit(contract, "UserProfileUpdated")
         .withArgs(account.address, "John Doe", "john@example.com");
+    });
+
+    it("add a new contact", async () => {
+      const account = accounts[0];
+      const contact = accounts[1];
+
+      await contract.connect(account).addContact(contact.address, "John Doe", "john@example.com");
+
+      const contacts = await contract.connect(account).listContacts();
+      expect(contacts.length).to.eq(1);
+      expect(contacts[0].userAddress).to.eq(contact.address);
+      expect(contacts[0].name).to.eq("John Doe");
     });
   });
 

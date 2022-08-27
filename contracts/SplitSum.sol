@@ -3,10 +3,11 @@ pragma solidity ^0.8.9;
 
 contract SplitSum {
     event UserProfileUpdated(address indexed userAddress, string name, string email);
+    event ContactAdded(address indexed userAddress, address indexed contactAddress, string name, string email);
     event GroupCreated(bytes32 indexed groupId, address indexed ownerAddress, string name, string description);
 
-    struct UserProfile {
-        address ownerAddress;
+    struct User {
+        address userAddress;
         string name;
         string email;
     }
@@ -20,13 +21,13 @@ contract SplitSum {
 
     struct Membership {
         address memberAddress;
-        string name;
         int256 balance;
     }
 
     address private _owner;
 
-    mapping(address => UserProfile) private _userProfiles;
+    mapping(address => User) private _userProfiles;
+    mapping(address => User[]) private _userContacts;
 
     mapping(bytes32 => Group) private _groups;
     mapping(address => Group[]) private _ownedGroups;
@@ -47,13 +48,27 @@ contract SplitSum {
     }
 
     function updateUserProfile(string calldata name, string calldata email) external {
-        _userProfiles[msg.sender] = UserProfile({ownerAddress: msg.sender, name: name, email: email});
+        _userProfiles[msg.sender] = User({userAddress: msg.sender, name: name, email: email});
 
         emit UserProfileUpdated(msg.sender, name, email);
     }
 
-    function getUserProfile() external view returns (UserProfile memory) {
+    function getUserProfile() external view returns (User memory) {
         return _userProfiles[msg.sender];
+    }
+
+    function addContact(
+        address contactAddress,
+        string calldata name,
+        string calldata email
+    ) external {
+        _userContacts[msg.sender].push(User({userAddress: contactAddress, name: name, email: email}));
+
+        emit ContactAdded(msg.sender, contactAddress, name, email);
+    }
+
+    function listContacts() external view returns (User[] memory) {
+        return _userContacts[msg.sender];
     }
 
     function createGroup(
@@ -105,6 +120,6 @@ contract SplitSum {
 
     function _addGroupMembership(bytes32 groupId, address memberAddress) internal {
         _membershipGroups[memberAddress].push(_groups[groupId]);
-        _groupMemberships[groupId].push(Membership({memberAddress: memberAddress, name: "", balance: 0}));
+        _groupMemberships[groupId].push(Membership({memberAddress: memberAddress, balance: 0}));
     }
 }
