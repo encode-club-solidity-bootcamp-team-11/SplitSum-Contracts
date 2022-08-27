@@ -33,6 +33,11 @@ contract SplitSum {
     mapping(address => Group[]) private _membershipGroups;
     mapping(bytes32 => Membership[]) private _groupMemberships;
 
+    modifier onlyGroupOwner(bytes32 groupId) {
+        require(_groups[groupId].ownerAddress == msg.sender, "Not a group owner");
+        _;
+    }
+
     constructor() {
         _owner = msg.sender;
     }
@@ -82,10 +87,20 @@ contract SplitSum {
         return _groupMemberships[groupId];
     }
 
-    function addGroupMembership(bytes32 groupId, address memberAddress) external {
-        require(_groups[groupId].ownerAddress == msg.sender, "Not a group owner");
-
+    function addGroupMembership(bytes32 groupId, address memberAddress) external onlyGroupOwner(groupId) {
         _addGroupMembership(groupId, memberAddress);
+    }
+
+    function removeGroupMembership(bytes32 groupId, address memberAddress) external onlyGroupOwner(groupId) {
+        Membership[] storage groupMemberships = _groupMemberships[groupId];
+        for (uint256 i = 0; i < groupMemberships.length; i++) {
+            if (groupMemberships[i].memberAddress == memberAddress) {
+                groupMemberships[i] = groupMemberships[groupMemberships.length - 1];
+                groupMemberships.pop();
+                break;
+            }
+        }
+        delete _membershipGroups[memberAddress];
     }
 
     function _addGroupMembership(bytes32 groupId, address memberAddress) internal {

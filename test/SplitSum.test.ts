@@ -95,7 +95,7 @@ describe("SplitSum", () => {
       expect(groups[1].name).to.eq("My membership group");
     });
 
-    it("add a new member into a group", async () => {
+    it("add a new member into an existing group", async () => {
       const groupOwnerAccount = accounts[0];
       const membershipAccount = accounts[1];
       const otherAccount = accounts[2];
@@ -112,6 +112,29 @@ describe("SplitSum", () => {
       expect(memberships.map((a) => a.memberAddress)).to.have.members([
         groupOwnerAccount.address,
         membershipAccount.address,
+      ]);
+    });
+
+    it("remove a member from an existing group", async () => {
+      const groupOwnerAccount = accounts[0];
+      const membershipAccount1 = accounts[1];
+      const membershipAccount2 = accounts[2];
+      const groupId = await createGroup(groupOwnerAccount, "My group", "group description", [
+        membershipAccount1.address,
+        membershipAccount2.address,
+      ]);
+
+      await expect(
+        contract.connect(membershipAccount1).removeGroupMembership(groupId, membershipAccount2.address)
+      ).to.revertedWith("Not a group owner");
+
+      await contract.connect(groupOwnerAccount).removeGroupMembership(groupId, membershipAccount2.address);
+      const memberships = await contract.listGroupMemberships(groupId);
+
+      expect(memberships.length).to.eq(2);
+      expect(memberships.map((a) => a.memberAddress)).to.have.members([
+        groupOwnerAccount.address,
+        membershipAccount1.address,
       ]);
     });
   });
