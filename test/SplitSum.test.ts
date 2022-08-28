@@ -2,11 +2,14 @@ import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { expect } from "chai";
 import { ethers } from "hardhat";
 import { SplitSum } from "../typechain-types";
+import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 
 describe("SplitSum", () => {
   let deployer: SignerWithAddress;
   let accounts: SignerWithAddress[];
   let contract: SplitSum;
+
+  const USDC_DECIMALS = 6;
 
   beforeEach(async () => {
     [deployer, ...accounts] = await ethers.getSigners();
@@ -48,6 +51,7 @@ describe("SplitSum", () => {
       await contract.connect(account).addContact(contact.address, "John Doe", "john@example.com");
 
       const contacts = await contract.connect(account).listContacts();
+
       expect(contacts.length).to.eq(1);
       expect(contacts[0].userAddress).to.eq(contact.address);
       expect(contacts[0].name).to.eq("John Doe");
@@ -58,7 +62,7 @@ describe("SplitSum", () => {
     it("creates a new group", async () => {
       const account = accounts[0];
 
-      const groupId = await createGroup(account, "Friend Hangouts", "group description");
+      const groupId = await createGroup(account, "Friend Hangouts", "group description", getCurrentTime());
 
       const group = await contract.getGroup(groupId);
       expect(group.groupId).to.eq(groupId);
@@ -69,17 +73,23 @@ describe("SplitSum", () => {
 
     it("does not allow to create a duplicate group", async () => {
       const account = accounts[0];
-      await createGroup(account, "existing group name", "group description");
+      await createGroup(account, "existing group name", "group description", getCurrentTime());
 
       await expect(
-        contract.connect(account).createGroup("existing group name", "group description", [])
+        contract.connect(account).createGroup("existing group name", "group description", getCurrentTime(), [])
       ).to.revertedWith("group already exists");
     });
 
     it("creates a new group with members", async () => {
       const account = accounts[0];
       const membersAddresses = [accounts[1].address, accounts[2].address];
-      const groupId = await createGroup(account, "Friend Hangouts", "group description", membersAddresses);
+      const groupId = await createGroup(
+        account,
+        "Friend Hangouts",
+        "group description",
+        getCurrentTime(),
+        membersAddresses
+      );
 
       const memberships = await contract.listGroupMemberships(groupId);
 
@@ -96,9 +106,11 @@ describe("SplitSum", () => {
       const account = accounts[0];
       const theSameGroupAccount = accounts[1];
       const otherAccount = accounts[2];
-      await createGroup(account, "My group", "group description");
-      await createGroup(theSameGroupAccount, "My membership group", "group description", [account.address]);
-      await createGroup(otherAccount, "Other group", "group description");
+      await createGroup(account, "My group", "group description", getCurrentTime());
+      await createGroup(theSameGroupAccount, "My membership group", "group description", getCurrentTime(), [
+        account.address,
+      ]);
+      await createGroup(otherAccount, "Other group", "group description", getCurrentTime());
 
       const groups = await contract.connect(account).listMembershipGroups();
 
@@ -111,7 +123,7 @@ describe("SplitSum", () => {
       const groupOwnerAccount = accounts[0];
       const membershipAccount = accounts[1];
       const otherAccount = accounts[2];
-      const groupId = await createGroup(groupOwnerAccount, "My group", "group description");
+      const groupId = await createGroup(groupOwnerAccount, "My group", "group description", getCurrentTime());
 
       await expect(
         contract.connect(otherAccount).addGroupMembership(groupId, membershipAccount.address)
@@ -131,7 +143,7 @@ describe("SplitSum", () => {
       const groupOwnerAccount = accounts[0];
       const membershipAccount1 = accounts[1];
       const membershipAccount2 = accounts[2];
-      const groupId = await createGroup(groupOwnerAccount, "My group", "group description", [
+      const groupId = await createGroup(groupOwnerAccount, "My group", "group description", getCurrentTime(), [
         membershipAccount1.address,
         membershipAccount2.address,
       ]);
@@ -151,15 +163,70 @@ describe("SplitSum", () => {
     });
   });
 
+  describe("Expenses", async () => {
+    it("creates a group's expense", async () => {
+      const [groupOwnerAccount, membershipAccount1, membershipAccount2, membershipAccount3, otherAccount] = accounts;
+      const groupId = await createGroup(groupOwnerAccount, "My group", "group description", getCurrentTime(), [
+        membershipAccount1.address,
+        membershipAccount2.address,
+        membershipAccount3.address,
+      ]);
+
+      const paidByUser = membershipAccount1;
+      const sharedExpenseMembers = [paidByUser.address, membershipAccount2.address, membershipAccount3.address];
+      const expenseAmount = ethers.utils.parseUnits("150.00", USDC_DECIMALS);
+      const txn = await contract
+        .connect(paidByUser)
+        .createExpense(groupId, expenseAmount, "yesterday hangout", getCurrentTime(), sharedExpenseMembers);
+      const txnReceipt = await txn.wait();
+      const expenseId = txnReceipt.events![0].args!.expenseId;
+
+      const expense = await contract.getExpense(expenseId);
+      expect(expense.groupId).to.eq(groupId);
+      expect(expense.amount).to.eq(expenseAmount);
+      expect(expense.description).to.eq("yesterday hangout");
+      expect(expense.memberAddresses).to.eql(sharedExpenseMembers);
+
+      const expenseMembers = await contract.listExpenseMembers(expenseId);
+      expect(expenseMembers.map((a) => a.memberAddress)).to.have.members(sharedExpenseMembers);
+      expect(expenseMembers.map((a) => ethers.utils.formatUnits(a.amount, USDC_DECIMALS))).to.have.members([
+        "50.0",
+        "50.0",
+        "50.0",
+      ]);
+    });
+
+    it("allows only group's members to create expenses", async () => {
+      const [groupOwnerAccount, membershipAccount1, otherAccount] = accounts;
+      const groupId = await createGroup(groupOwnerAccount, "My group", "group description", getCurrentTime(), [
+        membershipAccount1.address,
+      ]);
+
+      const paidByUser = groupOwnerAccount;
+      const sharedExpenseMembers = [paidByUser.address, membershipAccount1.address];
+      const expenseAmount = ethers.utils.parseUnits("150.00", USDC_DECIMALS);
+      await expect(
+        contract
+          .connect(otherAccount)
+          .createExpense(groupId, expenseAmount, "yesterday hangout", getCurrentTime(), sharedExpenseMembers)
+      ).to.revertedWith("Not in the group members");
+    });
+  });
+
   async function createGroup(
     owner: SignerWithAddress,
     name: string,
     description: string,
+    createdAtTimestamp: number,
     membersAddresses: string[] = []
   ): Promise<string> {
-    const txn = await contract.connect(owner).createGroup(name, description, membersAddresses);
+    const txn = await contract.connect(owner).createGroup(name, description, createdAtTimestamp, membersAddresses);
     const txnReceipt = await txn.wait();
     const groupId = txnReceipt.events![0].args!.groupId;
     return groupId;
+  }
+
+  function getCurrentTime(): number {
+    return Math.floor(Date.now() / 1000);
   }
 });
