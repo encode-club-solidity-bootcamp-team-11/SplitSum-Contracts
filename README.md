@@ -10,6 +10,45 @@ Split expenses with friends when you go hangouts or your holiday trips.
   </a>
 </div>
 
+## Setup
+
+### Run tests
+
+```bash
+yarn install
+yarn test
+```
+
+## Deployment
+
+### Deploy to Hardhat local in-memory network
+
+```bash
+yarn hardhat node
+yarn deploy:local
+```
+
+### Deploy to live network (Mainnet/Goerli)
+
+Setup your deployer wallet in environment variables. Look at the example in `.env.example`
+
+```bash
+cp .env.example .env
+# Replace placeholders with your keys
+```
+
+Deploy to the network
+
+```bash
+yarn deploy:goerli
+```
+
+Verify the contract (optional)
+
+```bash
+yarn verify --network goerli [DEPLOYED_CONTRACT_ADDRESS]
+```
+
 ## Contributors
 
 We love pull requests from everyone.

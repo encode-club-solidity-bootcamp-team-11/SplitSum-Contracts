@@ -165,7 +165,7 @@ describe("SplitSum", () => {
 
   describe("Expenses", async () => {
     it("creates a group's expense", async () => {
-      const [groupOwnerAccount, membershipAccount1, membershipAccount2, membershipAccount3, otherAccount] = accounts;
+      const [groupOwnerAccount, membershipAccount1, membershipAccount2, membershipAccount3] = accounts;
       const groupId = await createGroup(groupOwnerAccount, "My group", "group description", getCurrentTime(), [
         membershipAccount1.address,
         membershipAccount2.address,

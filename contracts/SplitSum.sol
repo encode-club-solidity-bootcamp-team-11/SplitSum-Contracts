@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.9;
 
-import "hardhat/console.sol";
-
 contract SplitSum {
     event UserProfileUpdated(address indexed userAddress, string name, string email);
     event ContactAdded(address indexed userAddress, address indexed contactAddress, string name, string email);
