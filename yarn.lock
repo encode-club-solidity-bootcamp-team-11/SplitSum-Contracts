@@ -1133,6 +1133,7 @@ __metadata:
     "@types/mocha": ^9.1.0
     "@types/node": ">=12.0.0"
     chai: ^4.2.0
+    dotenv: ^16.0.1
     ethers: ^5.4.7
     hardhat: ^2.10.2
     hardhat-gas-reporter: ^1.0.8
@@ -2701,6 +2702,13 @@ __metadata:
   version: 0.1.2
   resolution: "dom-walk@npm:0.1.2"
   checksum: 19eb0ce9c6de39d5e231530685248545d9cd2bd97b2cb3486e0bfc0f2a393a9addddfd5557463a932b52fdfcf68ad2a619020cd2c74a5fe46fbecaa8e80872f3
+  languageName: node
+  linkType: hard
+
+"dotenv@npm:^16.0.1":
+  version: 16.0.1
+  resolution: "dotenv@npm:16.0.1"
+  checksum: f459ffce07b977b7f15d8cc4ee69cdff77d4dd8c5dc8c85d2d485ee84655352c2415f9dd09d42b5b5985ced3be186130871b34e2f3e2569ebc72fbc2e8096792
   languageName: node
   linkType: hard
 
