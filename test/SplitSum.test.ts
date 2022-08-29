@@ -1,21 +1,22 @@
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { expect } from "chai";
+import { Contract } from "ethers";
 import { ethers } from "hardhat";
-import { SplitSum } from "../typechain-types";
+import { SplitSum, USDCMockToken } from "../typechain-types";
 
 describe("SplitSum", () => {
   let deployer: SignerWithAddress;
   let accounts: SignerWithAddress[];
   let contract: SplitSum;
+  let USDCTokenContract: USDCMockToken;
 
   const USDC_DECIMALS = 6;
 
   beforeEach(async () => {
     [deployer, ...accounts] = await ethers.getSigners();
 
-    const contractFactory = await ethers.getContractFactory("SplitSum", deployer);
-    contract = await contractFactory.deploy();
-    await contract.deployed();
+    USDCTokenContract = (await deployContract("USDCMockToken", "USDC Mock Token", "USDC")) as USDCMockToken;
+    contract = (await deployContract("SplitSum", USDCTokenContract.address)) as SplitSum;
   });
 
   describe("Deployment", async () => {
@@ -239,6 +240,25 @@ describe("SplitSum", () => {
       ).to.revertedWith("Not in the group members");
     });
   });
+
+  describe("Settlement", async () => {
+    it("settles up the amount that the user owed within the group", async () => {
+      await USDCTokenContract.mint(deployer.address, ethers.utils.parseUnits("100", USDC_DECIMALS));
+      await USDCTokenContract.approve(contract.address, ethers.utils.parseUnits("50", USDC_DECIMALS));
+
+      await contract
+        .connect(deployer)
+        .settleUp(ethers.utils.formatBytes32String(""), ethers.utils.parseUnits("50", USDC_DECIMALS));
+    });
+  });
+
+  async function deployContract(contractName: string, ...args: any[]): Promise<Contract> {
+    const contractFactory = await ethers.getContractFactory(contractName, deployer);
+    const contract = await contractFactory.deploy(...args);
+    await contract.deployed();
+
+    return contract;
+  }
 
   async function createGroup(
     owner: SignerWithAddress,

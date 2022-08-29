@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.9;
 
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "hardhat/console.sol";
+
 contract SplitSum {
     event UserProfileUpdated(address indexed userAddress, string name, string email);
     event ContactAdded(address indexed userAddress, address indexed contactAddress, string name, string email);
@@ -68,13 +71,16 @@ contract SplitSum {
     mapping(bytes32 => Expense[]) private _groupExpenses;
     mapping(bytes32 => mapping(address => ExpenseMember)) private _expenseMembers;
 
+    IERC20 private _settlementTokenInStableCoin;
+
+    constructor(IERC20 settlementTokenInStableCoin) {
+        _owner = msg.sender;
+        _settlementTokenInStableCoin = settlementTokenInStableCoin;
+    }
+
     modifier onlyGroupOwner(bytes32 groupId) {
         require(_groups[groupId].ownerAddress == msg.sender, "Not a group owner");
         _;
-    }
-
-    constructor() {
-        _owner = msg.sender;
     }
 
     function owner() external view returns (address) {
@@ -301,5 +307,13 @@ contract SplitSum {
                 membership.balance -= int256(memberExpenseAmount);
             }
         }
+    }
+
+    /********************************************************************
+     *   Settlement                                                     *
+     ********************************************************************/
+
+    function settleUp(bytes32 groupId, uint256 amount) external {
+        _settlementTokenInStableCoin.transferFrom(msg.sender, address(this), amount);
     }
 }
