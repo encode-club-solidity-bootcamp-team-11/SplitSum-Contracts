@@ -2,7 +2,6 @@ import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { expect } from "chai";
 import { ethers } from "hardhat";
 import { SplitSum } from "../typechain-types";
-import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 
 describe("SplitSum", () => {
   let deployer: SignerWithAddress;
@@ -160,6 +159,9 @@ describe("SplitSum", () => {
         groupOwnerAccount.address,
         membershipAccount1.address,
       ]);
+
+      const membershipGroups = await contract.connect(membershipAccount2).listMembershipGroups();
+      expect(membershipGroups.length).to.eq(0);
     });
   });
 
@@ -194,6 +196,31 @@ describe("SplitSum", () => {
         "50.0",
         "50.0",
       ]);
+    });
+
+    it("lists all group's memberships with their balances", async () => {
+      const [groupOwnerAccount, membershipAccount1, membershipAccount2, membershipAccount3] = accounts;
+      const groupId = await createGroup(groupOwnerAccount, "My group", "group description", getCurrentTime(), [
+        membershipAccount1.address,
+        membershipAccount2.address,
+        membershipAccount3.address,
+      ]);
+
+      const paidByUser = membershipAccount1;
+      const sharedExpenseMembers = [paidByUser.address, membershipAccount2.address, membershipAccount3.address];
+      const expenseAmount = ethers.utils.parseUnits("150.00", USDC_DECIMALS);
+      const txn = await contract
+        .connect(paidByUser)
+        .createExpense(groupId, expenseAmount, "yesterday hangout", getCurrentTime(), sharedExpenseMembers);
+      await txn.wait();
+
+      const memberships = await contract.listGroupMemberships(groupId);
+      expect(memberships.length).to.eq(4);
+      const getAccountBalance = (account: any) => memberships.find((m) => m.memberAddress == account.address)?.balance;
+      expect(getAccountBalance(groupOwnerAccount)).to.eq(0);
+      expect(getAccountBalance(paidByUser)).to.eq(ethers.utils.parseUnits("100", USDC_DECIMALS));
+      expect(getAccountBalance(membershipAccount2)).to.eq(ethers.utils.parseUnits("-50", USDC_DECIMALS));
+      expect(getAccountBalance(membershipAccount3)).to.eq(ethers.utils.parseUnits("-50", USDC_DECIMALS));
     });
 
     it("allows only group's members to create expenses", async () => {
