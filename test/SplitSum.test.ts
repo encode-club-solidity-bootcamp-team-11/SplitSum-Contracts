@@ -1,6 +1,6 @@
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { expect } from "chai";
-import { Contract } from "ethers";
+import { BigNumber, Contract } from "ethers";
 import { ethers } from "hardhat";
 import { SplitSum, USDCMockToken } from "../typechain-types";
 
@@ -177,7 +177,7 @@ describe("SplitSum", () => {
 
       const paidByUser = membershipAccount1;
       const sharedExpenseMembers = [paidByUser.address, membershipAccount2.address, membershipAccount3.address];
-      const expenseAmount = ethers.utils.parseUnits("150.00", USDC_DECIMALS);
+      const expenseAmount = toUSDC("150");
       const txn = await contract
         .connect(paidByUser)
         .createExpense(groupId, expenseAmount, "yesterday hangout", getCurrentTime(), sharedExpenseMembers);
@@ -207,21 +207,28 @@ describe("SplitSum", () => {
         membershipAccount3.address,
       ]);
 
-      const paidByUser = membershipAccount1;
-      const sharedExpenseMembers = [paidByUser.address, membershipAccount2.address, membershipAccount3.address];
-      const expenseAmount = ethers.utils.parseUnits("150.00", USDC_DECIMALS);
-      const txn = await contract
-        .connect(paidByUser)
-        .createExpense(groupId, expenseAmount, "yesterday hangout", getCurrentTime(), sharedExpenseMembers);
-      await txn.wait();
+      await contract
+        .connect(membershipAccount1)
+        .createExpense(groupId, toUSDC("150"), "yesterday hangout", getCurrentTime(), [
+          membershipAccount1.address,
+          membershipAccount2.address,
+          membershipAccount3.address,
+        ]);
+      await contract
+        .connect(groupOwnerAccount)
+        .createExpense(groupId, toUSDC("300"), "Bob's party", getCurrentTime(), [
+          groupOwnerAccount.address,
+          membershipAccount1.address,
+          membershipAccount2.address,
+        ]);
 
       const memberships = await contract.listGroupMemberships(groupId);
       expect(memberships.length).to.eq(4);
       const getAccountBalance = (account: any) => memberships.find((m) => m.memberAddress == account.address)?.balance;
-      expect(getAccountBalance(groupOwnerAccount)).to.eq(0);
-      expect(getAccountBalance(paidByUser)).to.eq(ethers.utils.parseUnits("100", USDC_DECIMALS));
-      expect(getAccountBalance(membershipAccount2)).to.eq(ethers.utils.parseUnits("-50", USDC_DECIMALS));
-      expect(getAccountBalance(membershipAccount3)).to.eq(ethers.utils.parseUnits("-50", USDC_DECIMALS));
+      expect(getAccountBalance(groupOwnerAccount)).to.eq(toUSDC("200"));
+      expect(getAccountBalance(membershipAccount1)).to.eq(0);
+      expect(getAccountBalance(membershipAccount2)).to.eq(toUSDC("-150"));
+      expect(getAccountBalance(membershipAccount3)).to.eq(toUSDC("-50"));
     });
 
     it("allows only group's members to create expenses", async () => {
@@ -232,23 +239,36 @@ describe("SplitSum", () => {
 
       const paidByUser = groupOwnerAccount;
       const sharedExpenseMembers = [paidByUser.address, membershipAccount1.address];
-      const expenseAmount = ethers.utils.parseUnits("150.00", USDC_DECIMALS);
       await expect(
         contract
           .connect(otherAccount)
-          .createExpense(groupId, expenseAmount, "yesterday hangout", getCurrentTime(), sharedExpenseMembers)
+          .createExpense(groupId, toUSDC("150"), "yesterday hangout", getCurrentTime(), sharedExpenseMembers)
       ).to.revertedWith("Not in the group members");
     });
   });
 
   describe("Settlement", async () => {
     it("settles up the amount that the user owed within the group", async () => {
-      await USDCTokenContract.mint(deployer.address, ethers.utils.parseUnits("100", USDC_DECIMALS));
-      await USDCTokenContract.approve(contract.address, ethers.utils.parseUnits("50", USDC_DECIMALS));
+      const [groupOwnerAccount, membershipAccount1, membershipAccount2] = accounts;
+      const groupId = await createGroup(groupOwnerAccount, "My group", "group description", getCurrentTime(), [
+        membershipAccount1.address,
+        membershipAccount2.address,
+      ]);
 
+      const sharedExpenseMembers = [groupOwnerAccount.address, membershipAccount1.address, membershipAccount2.address];
       await contract
-        .connect(deployer)
-        .settleUp(ethers.utils.formatBytes32String(""), ethers.utils.parseUnits("50", USDC_DECIMALS));
+        .connect(groupOwnerAccount)
+        .createExpense(groupId, toUSDC("150"), "yesterday hangout", getCurrentTime(), sharedExpenseMembers);
+
+      await USDCTokenContract.mint(membershipAccount1.address, toUSDC("50"));
+      await USDCTokenContract.connect(membershipAccount1).approve(contract.address, toUSDC("50"));
+      await contract.connect(membershipAccount1).settleUp(groupId, toUSDC("50"));
+
+      const memberships = await contract.listGroupMemberships(groupId);
+      const getAccountBalance = (account: any) => memberships.find((m) => m.memberAddress == account.address)?.balance;
+      expect(getAccountBalance(groupOwnerAccount)).to.eq(toUSDC("50"));
+      expect(getAccountBalance(membershipAccount1)).to.eq(0);
+      expect(getAccountBalance(membershipAccount2)).to.eq(toUSDC("-50"));
     });
   });
 
@@ -258,6 +278,10 @@ describe("SplitSum", () => {
     await contract.deployed();
 
     return contract;
+  }
+
+  function toUSDC(amount: string): BigNumber {
+    return ethers.utils.parseUnits(amount, USDC_DECIMALS);
   }
 
   async function createGroup(

@@ -2,7 +2,9 @@
 pragma solidity ^0.8.9;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
 import "hardhat/console.sol";
+import "@openzeppelin/contracts/utils/Strings.sol";
 
 contract SplitSum {
     event UserProfileUpdated(address indexed userAddress, string name, string email);
@@ -314,6 +316,31 @@ contract SplitSum {
      ********************************************************************/
 
     function settleUp(bytes32 groupId, uint256 amount) external {
-        _settlementTokenInStableCoin.transferFrom(msg.sender, address(this), amount);
+        Membership storage settledBy = _groupMemberships[groupId][msg.sender];
+        require(settledBy.memberAddress != address(0), "Not in the group members");
+        require(settledBy.balance < 0, "No debts to settle up");
+        require((settledBy.balance + int256(amount)) <= 0, "Greater than settlement amount");
+        require(
+            _settlementTokenInStableCoin.allowance(msg.sender, address(this)) >= amount,
+            "Insufficient allowance for settlement amount"
+        );
+
+        address[] memory memberAddresses = _groups[groupId].memberAddresses;
+        int256 remainingSettlementAmount = int256(amount);
+        for (uint256 i = 0; i < memberAddresses.length; i++) {
+            Membership storage membership = _groupMemberships[groupId][memberAddresses[i]];
+            if (membership.balance <= 0) continue;
+
+            int256 settlementAmount = membership.balance < remainingSettlementAmount
+                ? membership.balance
+                : remainingSettlementAmount;
+            _settlementTokenInStableCoin.transferFrom(msg.sender, membership.memberAddress, uint256(settlementAmount));
+            membership.balance -= settlementAmount;
+            remainingSettlementAmount -= settlementAmount;
+
+            if (membership.balance == 0) break;
+        }
+
+        settledBy.balance += int256(amount);
     }
 }
