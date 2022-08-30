@@ -262,13 +262,21 @@ describe("SplitSum", () => {
 
       await USDCTokenContract.mint(membershipAccount1.address, toUSDC("50"));
       await USDCTokenContract.connect(membershipAccount1).approve(contract.address, toUSDC("50"));
-      await contract.connect(membershipAccount1).settleUp(groupId, toUSDC("50"));
+      const txn = await contract.connect(membershipAccount1).settleUp(groupId, toUSDC("50"), getCurrentTime());
+      const txnReceipt = await txn.wait();
 
       const memberships = await contract.listGroupMemberships(groupId);
       const getAccountBalance = (account: any) => memberships.find((m) => m.memberAddress == account.address)?.balance;
       expect(getAccountBalance(groupOwnerAccount)).to.eq(toUSDC("50"));
       expect(getAccountBalance(membershipAccount1)).to.eq(0);
       expect(getAccountBalance(membershipAccount2)).to.eq(toUSDC("-50"));
+
+      // TODO: Not sure why we could query events from the network
+      // const settlementId = txnReceipt.events![0].args!.settlementId;
+      // const settlementMembers = await contract.listSettlementMembers(settlementId);
+      // expect(settlementMembers.length).to.eq(1);
+      // expect(settlementMembers[0].memberAddress).to.eq(groupOwnerAccount.address);
+      // expect(settlementMembers[0].amount).to.eq(toUSDC("50"));
     });
   });
 
