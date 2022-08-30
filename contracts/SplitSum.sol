@@ -3,9 +3,6 @@ pragma solidity ^0.8.9;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-import "hardhat/console.sol";
-import "@openzeppelin/contracts/utils/Strings.sol";
-
 contract SplitSum {
     event UserProfileUpdated(address indexed userAddress, string name, string email);
     event ContactAdded(address indexed userAddress, address indexed contactAddress, string name, string email);
@@ -22,6 +19,15 @@ contract SplitSum {
         address indexed paidByUserAddress,
         uint256 amount,
         string description,
+        uint256 createdAtTimestamp,
+        address[] memberAddresses
+    );
+
+    event SettlementCreated(
+        bytes32 indexed settlementId,
+        bytes32 indexed groupId,
+        address indexed settledByUserAddress,
+        uint256 amount,
         uint256 createdAtTimestamp,
         address[] memberAddresses
     );
@@ -55,7 +61,22 @@ contract SplitSum {
         uint256 createdAtTimestamp;
         address[] memberAddresses;
     }
+
     struct ExpenseMember {
+        address memberAddress;
+        uint256 amount; // 6 Decimals
+    }
+
+    struct Settlement {
+        bytes32 settlementId;
+        bytes32 groupId;
+        address settledByUserAddress;
+        uint256 amount; // 6 Decimals
+        uint256 createdAtTimestamp;
+        address[] memberAddresses;
+    }
+
+    struct SettlementMember {
         address memberAddress;
         uint256 amount; // 6 Decimals
     }
@@ -72,6 +93,10 @@ contract SplitSum {
     mapping(bytes32 => Expense) private _expenses;
     mapping(bytes32 => Expense[]) private _groupExpenses;
     mapping(bytes32 => mapping(address => ExpenseMember)) private _expenseMembers;
+
+    mapping(bytes32 => Settlement) private _settlements;
+    mapping(bytes32 => Settlement[]) private _groupSettlements;
+    mapping(bytes32 => mapping(address => SettlementMember)) private _settlementMembers;
 
     IERC20 private _settlementTokenInStableCoin;
 
@@ -315,7 +340,11 @@ contract SplitSum {
      *   Settlement                                                     *
      ********************************************************************/
 
-    function settleUp(bytes32 groupId, uint256 amount) external {
+    function settleUp(
+        bytes32 groupId,
+        uint256 amount,
+        uint256 createdAtTimestamp
+    ) external {
         Membership storage settledBy = _groupMemberships[groupId][msg.sender];
         require(settledBy.memberAddress != address(0), "Not in the group members");
         require(settledBy.balance < 0, "No debts to settle up");
@@ -325,11 +354,16 @@ contract SplitSum {
             "Insufficient allowance for settlement amount"
         );
 
+        bytes32 settlementId = keccak256(abi.encodePacked(msg.sender, groupId, amount, createdAtTimestamp));
+        require(_settlements[settlementId].settlementId == 0, "settlement already exists");
+        Settlement storage settlement = _createSettlement(settlementId, groupId, amount, createdAtTimestamp);
+
         address[] memory memberAddresses = _groups[groupId].memberAddresses;
         int256 remainingSettlementAmount = int256(amount);
         for (uint256 i = 0; i < memberAddresses.length; i++) {
             Membership storage membership = _groupMemberships[groupId][memberAddresses[i]];
             if (membership.balance <= 0) continue;
+            if (remainingSettlementAmount == 0) break;
 
             int256 settlementAmount = membership.balance < remainingSettlementAmount
                 ? membership.balance
@@ -338,9 +372,58 @@ contract SplitSum {
             membership.balance -= settlementAmount;
             remainingSettlementAmount -= settlementAmount;
 
-            if (membership.balance == 0) break;
+            settlement.memberAddresses.push(membership.memberAddress);
+            _settlementMembers[settlementId][membership.memberAddress] = SettlementMember({
+                memberAddress: membership.memberAddress,
+                amount: uint256(settlementAmount)
+            });
         }
 
         settledBy.balance += int256(amount);
+
+        emit SettlementCreated(
+            settlementId,
+            groupId,
+            msg.sender,
+            amount,
+            createdAtTimestamp,
+            settlement.memberAddresses
+        );
+    }
+
+    function getSettlement(bytes32 settlementId) external view returns (Settlement memory) {
+        return _settlements[settlementId];
+    }
+
+    function listSettlementMembers(bytes32 settlementId) external view returns (SettlementMember[] memory) {
+        Settlement memory settlement = _settlements[settlementId];
+        address[] memory memberAddresses = settlement.memberAddresses;
+        SettlementMember[] memory settlementMembers = new SettlementMember[](memberAddresses.length);
+
+        for (uint256 i = 0; i < memberAddresses.length; i++) {
+            address memberAddress = memberAddresses[i];
+            settlementMembers[i] = _settlementMembers[settlementId][memberAddress];
+        }
+
+        return settlementMembers;
+    }
+
+    function _createSettlement(
+        bytes32 settlementId,
+        bytes32 groupId,
+        uint256 amount,
+        uint256 createdAtTimestamp
+    ) private returns (Settlement storage) {
+        _settlements[settlementId] = Settlement({
+            settlementId: settlementId,
+            groupId: groupId,
+            settledByUserAddress: msg.sender,
+            amount: amount,
+            createdAtTimestamp: createdAtTimestamp,
+            memberAddresses: new address[](0)
+        });
+        _groupSettlements[groupId].push(_settlements[settlementId]);
+
+        return _settlements[settlementId];
     }
 }

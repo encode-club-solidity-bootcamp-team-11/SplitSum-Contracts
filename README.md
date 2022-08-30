@@ -46,7 +46,7 @@ yarn deploy:goerli
 Verify the contract (optional)
 
 ```bash
-yarn verify --network goerli [DEPLOYED_CONTRACT_ADDRESS]
+yarn verify --network goerli [DEPLOYED_CONTRACT_ADDRESS] [SETTLEMENT_TOKEN_IN_STABLECOIN_ADDRESS]
 ```
 
 ## Contributors
