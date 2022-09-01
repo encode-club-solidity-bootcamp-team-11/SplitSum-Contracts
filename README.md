@@ -49,6 +49,11 @@ Verify the contract (optional)
 yarn verify --network goerli [DEPLOYED_CONTRACT_ADDRESS] [SETTLEMENT_TOKEN_IN_STABLECOIN_ADDRESS]
 ```
 
+## Other Projects
+
+- [Frontend](https://github.com/encode-club-solidity-bootcamp-team-11/SplitSum-Frontend)
+- [Backend](https://github.com/encode-club-solidity-bootcamp-team-11/SplitSum)
+
 ## Contributors
 
 We love pull requests from everyone.
